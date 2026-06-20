@@ -148,7 +148,7 @@ function parseSteps(mdBody, slug) {
 
 function generateRecipeHtml(recipe) {
   const {
-    slug, title, genre, description, servings, updated,
+    slug, title, genres, description, servings, updated,
     ingredients, steps, hasCompleteImage, completeImageName
   } = recipe;
 
@@ -163,14 +163,14 @@ function generateRecipeHtml(recipe) {
             </li>`).join('\n');
 
   const stepItems = steps.map((step, i) => `
-          <div class="step-item${i === 0 ? ' is-active' : ''}" data-step="${i}">
-            <button class="step-header" aria-expanded="${i === 0 ? 'true' : 'false'}">
+          <div class="step-item is-active" data-step="${i}">
+            <button class="step-header" aria-expanded="true">
               <span class="step-number">${i + 1}</span>
               <span class="step-title-text">${escHtml(step.title)}</span>
               <span class="step-status"></span>
               <span class="step-chevron">▼</span>
             </button>
-            <div class="step-content"${i === 0 ? '' : ' hidden'}>
+            <div class="step-content">
               <div class="step-body">${step.bodyHtml}</div>
               ${step.hasImage ? `<img src="../img/${step.imageName}" alt="手順${step.stepNum}" class="step-image" loading="lazy" onerror="this.style.display='none'">` : ''}
               ${step.point ? `<div class="step-point"><span class="step-point-icon">💡</span><span class="step-point-text">${escHtml(step.point)}</span></div>` : ''}
@@ -205,7 +205,7 @@ function generateRecipeHtml(recipe) {
       <div class="recipe-header">
         <h1 class="recipe-title" id="recipe-title">${escHtml(title)}</h1>
         <div class="recipe-header-meta">
-          <span class="genre-badge">${escHtml(genre)}</span>
+          ${genres.map(g => `<span class="genre-badge">${escHtml(g)}</span>`).join('\n')}
           <button class="like-btn" id="recipe-like-btn" data-slug="${slug}" aria-label="いいね">
             <span class="like-icon">♥</span>
             <span class="like-count" id="recipe-like-count">0</span>
@@ -247,7 +247,7 @@ ${stepItems}
 
   <script>
     const RECIPE_DATA = ${JSON.stringify({
-      slug, title, genre, description, servings, updated,
+      slug, title, genres, description, servings, updated,
       ingredients, steps: steps.map(s => ({ title: s.title, point: s.point, stepNum: s.stepNum, hasImage: s.hasImage }))
     })};
   </script>
@@ -263,12 +263,13 @@ function generateIndexHtml(recipes, genres) {
       : '<div class="recipe-card-placeholder">🍽️</div>';
 
     const dateStr = r.updated.replace(/-/g, '/');
+    const genreBadges = r.genres.map(g => `<span class="recipe-card-genre">${escHtml(g)}</span>`).join('\n');
 
     return `
-        <a href="recipes/${r.slug}.html" class="recipe-card" data-slug="${r.slug}" data-genre="${escHtml(r.genre)}">
+        <a href="recipes/${r.slug}.html" class="recipe-card" data-slug="${r.slug}" data-genres='${JSON.stringify(r.genres)}'>
           <div class="recipe-card-image">${thumbHtml}</div>
           <div class="recipe-card-body">
-            <span class="recipe-card-genre">${escHtml(r.genre)}</span>
+            <div class="recipe-card-genres">${genreBadges}</div>
             <h2 class="recipe-card-title">${escHtml(r.title)}</h2>
             <div class="recipe-card-meta">
               <button class="like-btn" data-slug="${r.slug}" aria-label="いいね" onclick="event.preventDefault(); event.stopPropagation(); toggleLike('${r.slug}', this);">
@@ -338,7 +339,7 @@ function generateIndexHtml(recipes, genres) {
     const ALL_RECIPES = ${JSON.stringify(recipes.map(r => ({
       slug: r.slug,
       title: r.title,
-      genre: r.genre,
+      genres: r.genres,
       description: r.description,
       updated: r.updated,
       hasThumbnail: r.hasThumbnail,
@@ -408,10 +409,15 @@ function build() {
     const completeImageName = imageExists(slug, '_complete');
     const thumbnailName = imageExists(slug, '_thumb');
 
+    // Parse genres
+    const genres = frontmatter.genre
+      ? frontmatter.genre.split(',').map(g => g.trim()).filter(Boolean)
+      : [];
+
     const recipe = {
       slug,
       title: frontmatter.title,
-      genre: frontmatter.genre,
+      genres,
       description: frontmatter.description,
       servings: frontmatter.servings,
       updated: String(frontmatter.updated),
@@ -423,14 +429,14 @@ function build() {
       thumbnailName,
       searchText: [
         frontmatter.title,
-        frontmatter.genre,
+        ...genres,
         frontmatter.description,
         ...ingredients.map(ing => ing.name)
       ].join(' ')
     };
 
     allRecipes.push(recipe);
-    genreSet.add(frontmatter.genre);
+    genres.forEach(g => genreSet.add(g));
 
     // Generate recipe page
     const html = generateRecipeHtml(recipe);

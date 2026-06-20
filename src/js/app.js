@@ -94,11 +94,11 @@
       // Build filtered list with sort data
       const items = cards.map(card => {
         const slug = card.dataset.slug;
-        const genre = card.dataset.genre;
+        const genres = JSON.parse(card.dataset.genres || '[]');
         const recipe = ALL_RECIPES.find(r => r.slug === slug);
         if (!recipe) return { card, visible: false };
 
-        const matchGenre = currentGenre === 'all' || genre === currentGenre;
+        const matchGenre = currentGenre === 'all' || genres.includes(currentGenre);
         const matchSearch = !currentSearch ||
           recipe.searchText.toLowerCase().includes(currentSearch.toLowerCase());
 

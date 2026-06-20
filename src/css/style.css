@@ -356,6 +356,12 @@ ul { list-style: none; }
   flex: 1;
 }
 
+.recipe-card-genres {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
 .recipe-card-genre {
   font-size: 0.7rem;
   font-weight: 500;
@@ -363,7 +369,6 @@ ul { list-style: none; }
   background: var(--bg-badge);
   padding: 2px 8px;
   border-radius: var(--radius-full);
-  align-self: flex-start;
 }
 
 .recipe-card-title {
@@ -461,6 +466,7 @@ ul { list-style: none; }
 
 .recipe-header-meta {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   margin-top: 8px;

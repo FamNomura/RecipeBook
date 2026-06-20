@@ -1,6 +1,6 @@
 ---
 title: "親子丼"
-genre: "和食"
+genre: "和食, 丼もの, 鶏肉料理"
 description: "ふわとろ卵の定番親子丼。出汁の効いた優しい味わいが特徴です。"
 servings: 2
 updated: "2026-06-20"
