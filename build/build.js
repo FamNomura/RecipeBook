@@ -101,7 +101,9 @@ function parseSteps(mdBody, slug) {
   const sectionMatch = mdBody.match(/##\s*手順\s*\n([\s\S]*?)(?=\n##\s[^#]|$)/);
   if (!sectionMatch) return steps;
 
-  const stepBlocks = sectionMatch[1].split(/\n###\s+/).filter(s => s.trim());
+  // Ensure leading newline to correctly split the very first step
+  const content = '\n' + sectionMatch[1];
+  const stepBlocks = content.split(/\n###\s+/).filter(s => s.trim());
 
   stepBlocks.forEach((block, i) => {
     const lines = block.split('\n');
@@ -112,17 +114,15 @@ function parseSteps(mdBody, slug) {
     const bodyLines = [];
     for (let j = 1; j < lines.length; j++) {
       const line = lines[j];
-      const pointMatch = line.match(/^>\s*\*\*ポイント\*\*:\s*(.+)$/);
+      // Match both "> **ポイント**:" and "ポイント:" or "> ポイント:"
+      const pointMatch = line.match(/^(?:>\s*)?\*?\*?ポイント\*?\*?\s*:\s*(.+)$/);
       if (pointMatch) {
         point = pointMatch[1].trim();
-      } else if (!line.match(/^>\s*$/)) {
-        // Skip empty blockquote lines that might be part of a multi-line point
-        const contPoint = line.match(/^>\s*(.+)$/);
-        if (contPoint && point) {
-          point += contPoint[1].trim();
-        } else {
-          bodyLines.push(line);
-        }
+      } else if (line.trim().startsWith('>') && point) {
+        // Continue blockquote point text
+        point += ' ' + line.replace(/^>\s*/, '').trim();
+      } else {
+        bodyLines.push(line);
       }
     }
     body = bodyLines.join('\n').trim();
@@ -390,7 +390,8 @@ function build() {
     console.log(`  Processing: ${file}`);
 
     const raw = fs.readFileSync(path.join(RECIPES_DIR, file), 'utf-8');
-    const { data: frontmatter, content: mdBody } = matter(raw);
+    const normalized = raw.replace(/\r\n/g, '\n');
+    const { data: frontmatter, content: mdBody } = matter(normalized);
 
     // Validate required fields
     const required = ['title', 'genre', 'description', 'servings', 'updated'];
