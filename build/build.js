@@ -409,6 +409,8 @@ function build() {
     // Check images
     const completeImageName = imageExists(slug, '_complete');
     const thumbnailName = imageExists(slug, '_thumb');
+    const hasThumbnail = !!thumbnailName || !!completeImageName;
+    const activeThumbnailName = thumbnailName || completeImageName;
 
     // Parse genres
     const genres = frontmatter.genre
@@ -426,8 +428,8 @@ function build() {
       steps,
       hasCompleteImage: !!completeImageName,
       completeImageName,
-      hasThumbnail: !!thumbnailName,
-      thumbnailName,
+      hasThumbnail: hasThumbnail,
+      thumbnailName: activeThumbnailName,
       searchText: [
         frontmatter.title,
         ...genres,
