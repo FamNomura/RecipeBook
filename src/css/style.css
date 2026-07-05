@@ -180,12 +180,32 @@ ul { list-style: none; }
 /* 常時点灯インジケータ */
 .wakelock-badge {
   font-size: 0.75rem;
-  font-weight: 600;
-  background: var(--color-accent);
-  color: var(--text-on-primary);
-  padding: 4px 10px;
+  font-weight: 700;
+  padding: 6px 12px;
   border-radius: var(--radius-full);
-  display: none;
+  cursor: pointer;
+  user-select: none;
+  transition: all var(--transition-fast);
+  display: inline-block; /* 常に表示 */
+  border: 1.5px solid var(--text-muted);
+  background: var(--bg-input);
+  color: var(--text-secondary);
+}
+
+/* 常時点灯 ON 状態 */
+.wakelock-badge.is-active {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--text-on-primary);
+  box-shadow: 0 0 8px hsla(145, 45%, 45%, 0.4);
+}
+
+/* 常時点灯 エラー・非対応状態 */
+.wakelock-badge.is-error {
+  background: hsl(350, 70%, 93%);
+  border-color: var(--color-like);
+  color: var(--color-like);
+  cursor: not-allowed;
 }
 
 /* ── Search ────────────────────────────────────────── */
@@ -884,51 +904,64 @@ ul { list-style: none; }
   transform: translateY(0);
 }
 
-/* ── フローティングタイマー ─────────────────────────── */
+/* ── フローティングタイマー（スマホ見切れ対策済） ── */
 .timer-overlay {
   position: fixed;
-  bottom: 24px;
+  bottom: 16px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 1000;
-  width: calc(100% - 32px);
-  max-width: 400px;
+  width: calc(100% - 24px); /* 左右の余白を少し詰め、画面内に収める */
+  max-width: 360px; /* 小さめのスマホでも絶対に収まるサイズ */
   background: var(--bg-card);
   border: 2px solid var(--color-primary);
   box-shadow: var(--shadow-lg);
   border-radius: var(--radius-md);
-  padding: 12px 16px;
+  padding: 10px 12px; /* パディングをコンパクトに */
   animation: fadeInUp 0.3s ease both;
 }
+
 .timer-box {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px; /* 要素間の隙間を狭く */
+  width: 100%;
 }
+
 .timer-label {
-  font-size: 0.85rem;
+  font-size: 0.75rem;
   font-weight: 700;
   color: var(--text-secondary);
+  white-space: nowrap; /* 改行を防ぐ */
 }
+
 .timer-display {
-  font-size: 1.8rem;
+  font-size: 1.5rem; /* スマホ用にフォントサイズを微調整 */
   font-weight: 700;
   font-family: monospace;
   color: var(--color-primary);
+  white-space: nowrap;
+  flex-grow: 1;
+  text-align: center;
 }
+
 .timer-controls {
   display: flex;
-  gap: 6px;
+  gap: 4px;
+  flex-shrink: 0; /* ボタン群が潰れないように固定 */
 }
+
 .timer-btn {
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   font-weight: 600;
   background: var(--color-accent);
   color: var(--text-on-primary);
-  padding: 6px 12px;
+  padding: 6px 10px; /* ボタンを押しやすい最小限のサイズに調整 */
   border-radius: var(--radius-sm);
+  white-space: nowrap;
 }
+
 .timer-btn.cancel {
   background: var(--text-muted);
 }
