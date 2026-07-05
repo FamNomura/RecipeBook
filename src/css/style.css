@@ -904,20 +904,20 @@ ul { list-style: none; }
   transform: translateY(0);
 }
 
-/* ── フローティングタイマー（スマホ見切れ対策済） ── */
+/* ── フローティングタイマー（スマホ見切れ完全対策版） ── */
 .timer-overlay {
   position: fixed;
-  bottom: 16px;
-  left: 50%;
+  bottom: 12px;
+  left: 50;
   transform: translateX(-50%);
   z-index: 1000;
-  width: calc(100% - 24px); /* 左右の余白を少し詰め、画面内に収める */
-  max-width: 360px; /* 小さめのスマホでも絶対に収まるサイズ */
+  width: calc(100% - 16px); /* 左右余白を極限まで詰め */
+  max-width: 340px; /* さらに細身にして確実に画面内に収める */
   background: var(--bg-card);
   border: 2px solid var(--color-primary);
   box-shadow: var(--shadow-lg);
   border-radius: var(--radius-md);
-  padding: 10px 12px; /* パディングをコンパクトに */
+  padding: 8px 10px;
   animation: fadeInUp 0.3s ease both;
 }
 
@@ -925,39 +925,40 @@ ul { list-style: none; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px; /* 要素間の隙間を狭く */
+  gap: 6px;
   width: 100%;
 }
 
 .timer-label {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   font-weight: 700;
   color: var(--text-secondary);
-  white-space: nowrap; /* 改行を防ぐ */
+  white-space: nowrap;
 }
 
 .timer-display {
-  font-size: 1.5rem; /* スマホ用にフォントサイズを微調整 */
+  font-size: 1.4rem;
   font-weight: 700;
   font-family: monospace;
   color: var(--color-primary);
   white-space: nowrap;
   flex-grow: 1;
   text-align: center;
+  letter-spacing: -0.05em;
 }
 
 .timer-controls {
   display: flex;
   gap: 4px;
-  flex-shrink: 0; /* ボタン群が潰れないように固定 */
+  flex-shrink: 0;
 }
 
 .timer-btn {
-  font-size: 0.75rem;
+  font-size: 0.7rem; /* 文字を少し小さく */
   font-weight: 600;
   background: var(--color-accent);
   color: var(--text-on-primary);
-  padding: 6px 10px; /* ボタンを押しやすい最小限のサイズに調整 */
+  padding: 6px 8px; /* スマホで押しやすく、はみ出さないサイズ */
   border-radius: var(--radius-sm);
   white-space: nowrap;
 }
