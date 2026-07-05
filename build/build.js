@@ -9,9 +9,30 @@ const RECIPES_DIR = path.join(ROOT, 'recipes');
 const IMG_DIR = path.join(RECIPES_DIR, 'img');
 const DOCS_DIR = path.join(ROOT, 'docs');
 const SRC_DIR = path.join(ROOT, 'src');
+const LOG_DIR = path.join(ROOT, 'log');
+
+// ── Error Logger ─────────────────────────────────────────
+function logError(error) {
+  try {
+    if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true });
+    const now = new Date();
+    const timestamp = now.getFullYear() +
+      String(now.getMonth() + 1).padStart(2, '0') +
+      String(now.getDate()).padStart(2, '0') + '_' +
+      String(now.getHours()).padStart(2, '0') +
+      String(now.getMinutes()).padStart(2, '0') +
+      String(now.getSeconds()).padStart(2, '0');
+    
+    const logPath = path.join(LOG_DIR, `debug_log_${timestamp}.txt`);
+    const logContent = `Build Error Log [${now.toISOString()}]\n\nMessage: ${error.message}\n\nStack:\n${error.stack}`;
+    fs.writeFileSync(logPath, logContent, 'utf-8');
+    console.error(`\n❌ Error occurred. Saved log to: log/debug_log_${timestamp}.txt`);
+  } catch (e) {
+    console.error('Failed to write error log:', e);
+  }
+}
 
 // ── Utilities ───────────────────────────────────────────
-
 function ensureDir(dir) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
@@ -32,7 +53,6 @@ function imageExists(slug, suffix) {
 }
 
 // ── Ingredient Parsing ──────────────────────────────────
-
 function parseQuantity(str) {
   str = str.trim();
 
@@ -83,25 +103,30 @@ function parseIngredients(mdBody) {
 
   const lines = sectionMatch[1].split('\n');
   for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('###')) {
+      const groupName = trimmed.replace(/^###\s*/, '').trim();
+      ingredients.push({ type: 'group', name: groupName });
+      continue;
+    }
+
     const itemMatch = line.match(/^-\s+(.+?):\s*(.+)$/);
     if (itemMatch) {
       const name = itemMatch[1].trim();
       const quantityStr = itemMatch[2].trim();
       const parsed = parseQuantity(quantityStr);
-      ingredients.push({ name, ...parsed });
+      ingredients.push({ type: 'item', name, ...parsed });
     }
   }
   return ingredients;
 }
 
 // ── Step Parsing ────────────────────────────────────────
-
 function parseSteps(mdBody, slug) {
   const steps = [];
   const sectionMatch = mdBody.match(/##\s*手順\s*\n([\s\S]*?)(?=\n##\s[^#]|$)/);
   if (!sectionMatch) return steps;
 
-  // Ensure leading newline to correctly split the very first step
   const content = '\n' + sectionMatch[1];
   const stepBlocks = content.split(/\n###\s+/).filter(s => s.trim());
 
@@ -114,12 +139,10 @@ function parseSteps(mdBody, slug) {
     const bodyLines = [];
     for (let j = 1; j < lines.length; j++) {
       const line = lines[j];
-      // Match both "> **ポイント**:" and "ポイント:" or "> ポイント:"
       const pointMatch = line.match(/^(?:>\s*)?\*?\*?ポイント\*?\*?\s*:\s*(.+)$/);
       if (pointMatch) {
         point = pointMatch[1].trim();
       } else if (line.trim().startsWith('>') && point) {
-        // Continue blockquote point text
         point += ' ' + line.replace(/^>\s*/, '').trim();
       } else {
         bodyLines.push(line);
@@ -145,22 +168,27 @@ function parseSteps(mdBody, slug) {
 }
 
 // ── HTML Generation ─────────────────────────────────────
-
 function generateRecipeHtml(recipe) {
   const {
-    slug, title, genres, description, servings, updated,
+    slug, title, source, genres, description, servings, updated,
     ingredients, steps, hasCompleteImage, completeImageName
   } = recipe;
 
-  const ingredientItems = ingredients.map((ing, i) => `
-            <li class="ingredient-item" data-index="${i}">
-              <span class="ingredient-name">${ing.name}</span>
+  const displayTitle = source ? `${title}：${source}` : title;
+
+  const ingredientItems = ingredients.map((ing, i) => {
+    if (ing.type === 'group') {
+      return `            <li class="ingredient-group-heading"><h3>${escHtml(ing.name)}</h3></li>`;
+    }
+    return `            <li class="ingredient-item" data-index="${i}">
+              <span class="ingredient-name">${escHtml(ing.name)}</span>
               <span class="ingredient-quantity"
                     data-base-value="${ing.value !== null ? ing.value : ''}"
                     data-prefix="${escHtml(ing.prefix)}"
                     data-suffix="${escHtml(ing.suffix)}"
                     data-original="${escHtml(ing.original)}">${escHtml(ing.original)}</span>
-            </li>`).join('\n');
+            </li>`;
+  }).join('\n');
 
   const stepItems = steps.map((step, i) => `
           <div class="step-item is-active" data-step="${i}">
@@ -183,7 +211,7 @@ function generateRecipeHtml(recipe) {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${escHtml(title)} | レシピブック</title>
+  <title>${escHtml(displayTitle)} | レシピブック</title>
   <meta name="description" content="${escHtml(description)}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -197,13 +225,14 @@ function generateRecipeHtml(recipe) {
         <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M13 16l-6-6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         一覧に戻る
       </a>
+      <div id="wakelock-status" class="wakelock-badge" title="画面常時点灯中">👁️ 常時点灯</div>
     </div>
   </header>
 
   <main class="recipe-page">
     <article class="recipe-article">
       <div class="recipe-header">
-        <h1 class="recipe-title" id="recipe-title">${escHtml(title)}</h1>
+        <h1 class="recipe-title" id="recipe-title">${escHtml(title)}${source ? `<span class="recipe-title-source">：${escHtml(source)}</span>` : ''}</h1>
         <div class="recipe-header-meta">
           ${genres.map(g => `<span class="genre-badge">${escHtml(g)}</span>`).join('\n')}
           <button class="like-btn" id="recipe-like-btn" data-slug="${slug}" aria-label="いいね">
@@ -222,7 +251,7 @@ function generateRecipeHtml(recipe) {
       <p class="recipe-description" id="recipe-description">${escHtml(description)}</p>
 
       <section class="recipe-section" id="ingredients-section">
-        <h2 class="section-title">材料</h2>
+        <h2 class="section-title">材料 (タップして消し込み)</h2>
         <div class="servings-control">
           <button class="servings-btn" id="servings-decrease" aria-label="人数を減らす">−</button>
           <span class="servings-display"><span id="servings-count">${servings}</span>人前</span>
@@ -234,7 +263,10 @@ ${ingredientItems}
       </section>
 
       <section class="recipe-section" id="steps-section">
-        <h2 class="section-title">作り方</h2>
+        <div class="steps-section-header">
+          <h2 class="section-title">作り方</h2>
+          <button id="steps-toggle-all-btn" class="toggle-all-btn">全て閉じる</button>
+        </div>
         <div class="progress-bar-wrapper">
           <div class="progress-bar" id="progress-bar"></div>
         </div>
@@ -245,9 +277,22 @@ ${stepItems}
     </article>
   </main>
 
+  <div id="global-timer-overlay" class="timer-overlay" hidden>
+    <div class="timer-box">
+      <span class="timer-label">タイマー</span>
+      <span id="global-timer-display" class="timer-display">00:00</span>
+      <div class="timer-controls">
+        <button id="timer-pause-btn" class="timer-btn">一時停止</button>
+        <button id="timer-cancel-btn" class="timer-btn cancel">消去</button>
+      </div>
+    </div>
+  </div>
+
+  <audio id="timer-alarm-sound" src="https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg" preload="auto"></audio>
+
   <script>
     const RECIPE_DATA = ${JSON.stringify({
-      slug, title, genres, description, servings, updated,
+      slug, title, source, genres, description, servings, updated,
       ingredients, steps: steps.map(s => ({ title: s.title, point: s.point, stepNum: s.stepNum, hasImage: s.hasImage }))
     })};
   </script>
@@ -264,13 +309,14 @@ function generateIndexHtml(recipes, genres) {
 
     const dateStr = r.updated.replace(/-/g, '/');
     const genreBadges = r.genres.map(g => `<span class="recipe-card-genre">${escHtml(g)}</span>`).join('\n');
+    const fullTitle = r.source ? `${r.title}：${r.source}` : r.title;
 
     return `
         <a href="recipes/${r.slug}.html" class="recipe-card" data-slug="${r.slug}" data-genres='${JSON.stringify(r.genres)}'>
           <div class="recipe-card-image">${thumbHtml}</div>
           <div class="recipe-card-body">
             <div class="recipe-card-genres">${genreBadges}</div>
-            <h2 class="recipe-card-title">${escHtml(r.title)}</h2>
+            <h2 class="recipe-card-title">${escHtml(fullTitle)}</h2>
             <div class="recipe-card-meta">
               <button class="like-btn" data-slug="${r.slug}" aria-label="いいね" onclick="event.preventDefault(); event.stopPropagation(); toggleLike('${r.slug}', this);">
                 <span class="like-icon">♥</span>
@@ -304,7 +350,7 @@ function generateIndexHtml(recipes, genres) {
       <h1 class="site-title">🍳 レシピブック</h1>
       <div class="search-wrapper">
         <svg class="search-icon" width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="7.5" cy="7.5" r="5.5" stroke="currentColor" stroke-width="2"/><path d="M12 12l4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-        <input type="search" id="search-input" placeholder="レシピ名・材料で検索..." aria-label="レシピ検索">
+        <input type="search" id="search-input" placeholder="レシピ名・材料・出典で検索..." aria-label="レシピ検索">
       </div>
     </div>
   </header>
@@ -363,125 +409,117 @@ function escHtml(str) {
 }
 
 // ── Main Build ──────────────────────────────────────────
-
 function build() {
-  console.log('🍳 Building Recipe Book...\n');
+  try {
+    console.log('🍳 Building Recipe Book...\n');
 
-  // Clean output
-  cleanDir(DOCS_DIR);
-  ensureDir(path.join(DOCS_DIR, 'recipes'));
-  ensureDir(path.join(DOCS_DIR, 'css'));
-  ensureDir(path.join(DOCS_DIR, 'js'));
-  ensureDir(path.join(DOCS_DIR, 'img'));
+    cleanDir(DOCS_DIR);
+    ensureDir(path.join(DOCS_DIR, 'recipes'));
+    ensureDir(path.join(DOCS_DIR, 'css'));
+    ensureDir(path.join(DOCS_DIR, 'js'));
+    ensureDir(path.join(DOCS_DIR, 'img'));
 
-  // Find recipe files
-  const mdFiles = fs.readdirSync(RECIPES_DIR).filter(f => f.endsWith('.md'));
-  if (mdFiles.length === 0) {
-    console.log('⚠️  No recipe files found in recipes/');
-    return;
-  }
-  console.log(`📄 Found ${mdFiles.length} recipe(s)\n`);
+    const mdFiles = fs.readdirSync(RECIPES_DIR).filter(f => f.endsWith('.md'));
+    if (mdFiles.length === 0) {
+      console.log('⚠️  No recipe files found in recipes/');
+      return;
+    }
+    console.log(`📄 Found ${mdFiles.length} recipe(s)\n`);
 
-  const allRecipes = [];
-  const genreSet = new Set();
+    const allRecipes = [];
+    const genreSet = new Set();
 
-  for (const file of mdFiles) {
-    const slug = path.basename(file, '.md');
-    console.log(`  Processing: ${file}`);
+    for (const file of mdFiles) {
+      const slug = path.basename(file, '.md');
+      console.log(`  Processing: ${file}`);
 
-    const raw = fs.readFileSync(path.join(RECIPES_DIR, file), 'utf-8');
-    const normalized = raw.replace(/\r\n/g, '\n');
-    const { data: frontmatter, content: mdBody } = matter(normalized);
+      const raw = fs.readFileSync(path.join(RECIPES_DIR, file), 'utf-8');
+      const normalized = raw.replace(/\r\n/g, '\n');
+      const { data: frontmatter, content: mdBody } = matter(normalized);
 
-    // Validate required fields
-    const required = ['title', 'genre', 'description', 'servings', 'updated'];
-    for (const field of required) {
-      if (!frontmatter[field]) {
-        console.warn(`  ⚠️  Missing required field "${field}" in ${file}, skipping.`);
-        continue;
+      const required = ['title', 'genre', 'description', 'servings', 'updated'];
+      for (const field of required) {
+        if (!frontmatter[field]) {
+          console.warn(`  ⚠️  Missing required field "${field}" in ${file}, skipping.`);
+          continue;
+        }
       }
+
+      const ingredients = parseIngredients(mdBody);
+      const steps = parseSteps(mdBody, slug);
+
+      const completeImageName = imageExists(slug, '_complete');
+      const thumbnailName = imageExists(slug, '_thumb');
+      const hasThumbnail = !!thumbnailName || !!completeImageName;
+      const activeThumbnailName = thumbnailName || completeImageName;
+
+      const genres = frontmatter.genre
+        ? frontmatter.genre.split(',').map(g => g.trim()).filter(Boolean)
+        : [];
+
+      const recipe = {
+        slug,
+        title: frontmatter.title,
+        source: frontmatter.source || '',
+        genres,
+        description: frontmatter.description,
+        servings: frontmatter.servings,
+        updated: String(frontmatter.updated),
+        ingredients,
+        steps,
+        hasCompleteImage: !!completeImageName,
+        completeImageName,
+        hasThumbnail: hasThumbnail,
+        thumbnailName: activeThumbnailName,
+        searchText: [
+          frontmatter.title,
+          frontmatter.source || '',
+          ...genres,
+          frontmatter.description,
+          ...ingredients.map(ing => ing.name || '')
+        ].join(' ')
+      };
+
+      allRecipes.push(recipe);
+      genres.forEach(g => genreSet.add(g));
+
+      const html = generateRecipeHtml(recipe);
+      fs.writeFileSync(path.join(DOCS_DIR, 'recipes', `${slug}.html`), html, 'utf-8');
+      console.log(`  ✅ Generated: recipes/${slug}.html`);
     }
 
-    // Parse content
-    const ingredients = parseIngredients(mdBody);
-    const steps = parseSteps(mdBody, slug);
+    const allGenres = [...genreSet].sort();
+    const indexHtml = generateIndexHtml(allRecipes, allGenres);
+    fs.writeFileSync(path.join(DOCS_DIR, 'index.html'), indexHtml, 'utf-8');
+    console.log(`\n✅ Generated: index.html (${allRecipes.length} recipes, ${allGenres.length} genres)`);
 
-    // Check images
-    const completeImageName = imageExists(slug, '_complete');
-    const thumbnailName = imageExists(slug, '_thumb');
-    const hasThumbnail = !!thumbnailName || !!completeImageName;
-    const activeThumbnailName = thumbnailName || completeImageName;
-
-    // Parse genres
-    const genres = frontmatter.genre
-      ? frontmatter.genre.split(',').map(g => g.trim()).filter(Boolean)
-      : [];
-
-    const recipe = {
-      slug,
-      title: frontmatter.title,
-      genres,
-      description: frontmatter.description,
-      servings: frontmatter.servings,
-      updated: String(frontmatter.updated),
-      ingredients,
-      steps,
-      hasCompleteImage: !!completeImageName,
-      completeImageName,
-      hasThumbnail: hasThumbnail,
-      thumbnailName: activeThumbnailName,
-      searchText: [
-        frontmatter.title,
-        ...genres,
-        frontmatter.description,
-        ...ingredients.map(ing => ing.name)
-      ].join(' ')
-    };
-
-    allRecipes.push(recipe);
-    genres.forEach(g => genreSet.add(g));
-
-    // Generate recipe page
-    const html = generateRecipeHtml(recipe);
-    fs.writeFileSync(path.join(DOCS_DIR, 'recipes', `${slug}.html`), html, 'utf-8');
-    console.log(`  ✅ Generated: recipes/${slug}.html`);
-  }
-
-  // Sort genres alphabetically
-  const allGenres = [...genreSet].sort();
-
-  // Generate index page
-  const indexHtml = generateIndexHtml(allRecipes, allGenres);
-  fs.writeFileSync(path.join(DOCS_DIR, 'index.html'), indexHtml, 'utf-8');
-  console.log(`\n✅ Generated: index.html (${allRecipes.length} recipes, ${allGenres.length} genres)`);
-
-  // Copy CSS
-  const cssSource = path.join(SRC_DIR, 'css', 'style.css');
-  if (fs.existsSync(cssSource)) {
-    fs.copyFileSync(cssSource, path.join(DOCS_DIR, 'css', 'style.css'));
-    console.log('✅ Copied: css/style.css');
-  }
-
-  // Copy JS
-  const jsSource = path.join(SRC_DIR, 'js', 'app.js');
-  if (fs.existsSync(jsSource)) {
-    fs.copyFileSync(jsSource, path.join(DOCS_DIR, 'js', 'app.js'));
-    console.log('✅ Copied: js/app.js');
-  }
-
-  // Copy images
-  if (fs.existsSync(IMG_DIR)) {
-    const imgFiles = fs.readdirSync(IMG_DIR);
-    for (const img of imgFiles) {
-      const src = path.join(IMG_DIR, img);
-      if (fs.statSync(src).isFile()) {
-        fs.copyFileSync(src, path.join(DOCS_DIR, 'img', img));
-      }
+    const cssSource = path.join(SRC_DIR, 'css', 'style.css');
+    if (fs.existsSync(cssSource)) {
+      fs.copyFileSync(cssSource, path.join(DOCS_DIR, 'css', 'style.css'));
+      console.log('✅ Copied: css/style.css');
     }
-    console.log(`✅ Copied: ${imgFiles.length} image(s)`);
-  }
 
-  console.log('\n🎉 Build complete!\n');
+    const jsSource = path.join(SRC_DIR, 'js', 'app.js');
+    if (fs.existsSync(jsSource)) {
+      fs.copyFileSync(jsSource, path.join(DOCS_DIR, 'js', 'app.js'));
+      console.log('✅ Copied: js/app.js');
+    }
+
+    if (fs.existsSync(IMG_DIR)) {
+      const imgFiles = fs.readdirSync(IMG_DIR);
+      for (const img of imgFiles) {
+        const src = path.join(IMG_DIR, img);
+        if (fs.statSync(src).isFile()) {
+          fs.copyFileSync(src, path.join(DOCS_DIR, 'img', img));
+        }
+      }
+      console.log(`✅ Copied: ${imgFiles.length} image(s)`);
+    }
+
+    console.log('\n🎉 Build complete!\n');
+  } catch (error) {
+    logError(error);
+  }
 }
 
 build();
