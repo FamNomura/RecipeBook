@@ -441,16 +441,8 @@
     function openNextStep(currentIndex) {
       for (let i = currentIndex + 1; i < steps.length; i++) {
         if (!steps[i].classList.contains('is-done')) {
-          // 先に次のステップを展開する
+          // 次のステップを展開する（画面はスクロールせずそのまま維持されます）
           toggleStep(steps[i], true);
-          
-          // 前の工程が閉じて全体の高さが確定するのをほんの少し（100ms）待ってからスクロール
-          setTimeout(() => {
-            steps[i].scrollIntoView({ 
-              behavior: 'smooth', 
-              block: 'start' // 'center'から'start'に変更し、次の手順のヘッダーが画面上部に来るよう調整
-            });
-          }, 100);
           return;
         }
       }
