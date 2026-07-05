@@ -163,24 +163,69 @@
     initRecipeLikeButton();
   }
 
-  // ── 提案A: Wake Lock API (画面常時点灯) ────────────────
+// ── 提案A: Wake Lock API (手動トグルボタン式に改善) ──
   let wakeLock = null;
   async function initWakeLock() {
-    const statusBadge = document.getElementById('wakelock-status');
-    if (!('wakeLock' in navigator)) return;
+    const btn = document.getElementById('wakelock-status');
+    if (!btn) return;
+
+    // ブラウザがそもそも Wake Lock API に非対応の場合
+    if (!('wakeLock' in navigator)) {
+      btn.textContent = '👁️ 点灯非対応';
+      btn.classList.add('is-error');
+      return;
+    }
+
+    // 初期表示を OFF 状態に明示化
+    btn.textContent = '◯ 常時点灯 OFF';
+    btn.classList.remove('is-active');
 
     async function requestWakeLock() {
       try {
         wakeLock = await navigator.wakeLock.request('screen');
-        if (statusBadge) statusBadge.style.display = 'block';
+        btn.textContent = '● 常時点灯 ON';
+        btn.classList.add('is-active');
+        
+        // 自動で解除された場合のイベント監視
+        wakeLock.addEventListener('release', () => {
+          if (!document.hidden && wakeLock !== null) {
+            // 意図しない解除なら再取得を試みる
+          } else {
+            setLockOffVisuals();
+          }
+        });
       } catch (err) {
-        if (statusBadge) statusBadge.style.display = 'none';
+        btn.textContent = '⚠️ 点灯エラー';
+        btn.classList.add('is-error');
+        wakeLock = null;
       }
     }
 
-    await requestWakeLock();
+    function releaseWakeLock() {
+      if (wakeLock !== null) {
+        wakeLock.release();
+        wakeLock = null;
+      }
+      setLockOffVisuals();
+    }
 
-    // タブ切り替えから戻ったときに再取得
+    function setLockOffVisuals() {
+      btn.textContent = '◯ 常時点灯 OFF';
+      btn.classList.remove('is-active');
+    }
+
+    // タップされたときにON/OFFを切り替える
+    btn.addEventListener('click', async () => {
+      if (btn.classList.contains('is-error')) return;
+
+      if (wakeLock === null) {
+        await requestWakeLock();
+      } else {
+        releaseWakeLock();
+      }
+    });
+
+    // タブがバックグラウンドから戻ってきたときの制御追従
     document.addEventListener('visibilitychange', async () => {
       if (wakeLock !== null && document.visibilityState === 'visible') {
         await requestWakeLock();
