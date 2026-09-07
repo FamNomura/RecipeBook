@@ -908,7 +908,7 @@ ul { list-style: none; }
 .timer-overlay {
   position: fixed;
   bottom: 12px;
-  left: 50;
+  left: 50%;
   transform: translateX(-50%);
   z-index: 1000;
   width: calc(100% - 16px); /* 左右余白を極限まで詰め */
