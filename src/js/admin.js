@@ -11,7 +11,7 @@
   let currentFileSha = null;
   let attachedImageBase64 = null;
 
-  // DOM Elements
+  // DOM要素の取得
   const authSection = document.getElementById('auth-section');
   const tokenInput = document.getElementById('gh-token-input');
   const saveTokenBtn = document.getElementById('save-token-btn');
@@ -43,9 +43,8 @@
   const addStepBtn = document.getElementById('add-step-btn');
   const submitBtn = document.getElementById('submit-btn');
 
-// ── GitHub API Helper（修正版） ──
+  // ── GitHub API 通信ラッパー ──
   async function ghApi(path, options = {}) {
-    // 先頭や末尾のスラッシュを整理
     const cleanPath = path ? path.replace(/^\/+|\/+$/g, '') : '';
     const url = cleanPath
       ? `https://api.github.com/repos/${OWNER}/${REPO}/${cleanPath}`
@@ -57,35 +56,67 @@
       ...options.headers
     };
 
-    const res = await fetch(url, {
-      method: options.method || 'GET',
-      headers: headers,
-      body: options.body
-    });
+    try {
+      const res = await fetch(url, {
+        method: options.method || 'GET',
+        headers: headers,
+        body: options.body
+      });
 
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}));
-      throw new Error(`HTTP ${res.status}: ${errData.message || res.statusText}`);
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(`HTTP ${res.status}: ${errData.message || res.statusText}`);
+      }
+      return res.status !== 204 ? res.json() : true;
+    } catch (err) {
+      console.error('API Error:', err);
+      throw err;
     }
-    return res.status !== 204 ? res.json() : true;
   }
 
-  // ── 認証状態管理（修正版） ──
+  // ── 日本語UTF-8対応 Base64 相互変換 ──
+  function utf8ToBase64(str) {
+    const bytes = new TextEncoder().encode(str);
+    let bin = '';
+    for (let i = 0; i < bytes.length; i++) {
+      bin += String.fromCharCode(bytes[i]);
+    }
+    return btoa(bin);
+  }
+
+  function base64ToUtf8(str) {
+    const bin = atob(str.replace(/\s/g, ''));
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) {
+      bytes[i] = bin.charCodeAt(i);
+    }
+    return new TextDecoder().decode(bytes);
+  }
+
+  // ── 認証状態管理 ──
   async function verifyAndInitToken(token) {
+    // 1. file:// プロトコルチェック
+    if (window.location.protocol === 'file:') {
+      authStatus.innerHTML = '⚠️ <strong>ローカルファイル（file://）から直接開かれています。</strong><br>ブラウザのセキュリティ制限によりGitHubへの通信が遮断されます。<br>公開先の <code>https://famnomura.github.io/RecipeBook/admin.html</code> を開いて実行してください。';
+      authStatus.className = 'status-badge error';
+      return;
+    }
+
     if (!token) {
-      authStatus.textContent = 'トークンが未設定です。';
+      authStatus.textContent = 'トークンを入力してください。';
       authStatus.className = 'status-badge error';
       clearTokenBtn.style.display = 'none';
       operationBar.style.display = 'none';
       editorSection.style.display = 'none';
       return;
     }
-    currentToken = token.trim(); // 空白を自動除去
+
+    currentToken = token.trim();
     authStatus.textContent = 'GitHubに接続中...';
     authStatus.className = 'status-badge';
 
     try {
-      // recipes フォルダの存在確認を兼ねて疎通テスト
+      // リポジトリ内の recipes フォルダを取得して疎通確認
       await ghApi('contents/recipes');
       localStorage.setItem(TOKEN_KEY, currentToken);
       tokenInput.value = '••••••••••••••••••••';
@@ -98,49 +129,11 @@
       operationBar.style.display = 'block';
       loadRecipeList();
     } catch (e) {
-      authStatus.textContent = `❌ 接続失敗: ${e.message}`;
-      authStatus.className = 'status-badge error';
-      tokenInput.disabled = false;
-      saveTokenBtn.style.display = 'inline-block';
-      clearTokenBtn.style.display = 'none';
-    }
-  }
-  // UTF-8 対応 Base64 相互変換
-  function utf8ToBase64(str) {
-    return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (match, p1) => String.fromCharCode('0x' + p1)));
-  }
-  function base64ToUtf8(str) {
-    return decodeURIComponent(atob(str).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''));
-  }
-
-  // ── 認証状態管理 ──
-  async function verifyAndInitToken(token) {
-    if (!token) {
-      authStatus.textContent = 'トークンが未設定です。';
-      authStatus.className = 'status-badge error';
-      clearTokenBtn.style.display = 'none';
-      operationBar.style.display = 'none';
-      editorSection.style.display = 'none';
-      return;
-    }
-    currentToken = token;
-    authStatus.textContent = 'GitHubに接続中...';
-    authStatus.className = 'status-badge';
-
-    try {
-      await ghApi(''); // リポジトリのメタ情報取得で疎通確認
-      localStorage.setItem(TOKEN_KEY, token);
-      tokenInput.value = '••••••••••••••••••••';
-      tokenInput.disabled = true;
-      saveTokenBtn.style.display = 'none';
-      clearTokenBtn.style.display = 'inline-block';
-      authStatus.textContent = '✓ 接続成功: 編集権限を確認しました';
-      authStatus.className = 'status-badge success';
-
-      operationBar.style.display = 'block';
-      loadRecipeList();
-    } catch (e) {
-      authStatus.textContent = `❌ 接続失敗: ${e.message}`;
+      let msg = e.message;
+      if (msg === 'Failed to fetch') {
+        msg = '通信に失敗しました（ブラウザの広告ブロック拡張機能が有効な場合、一時的にOFFにして再度お試しください）。';
+      }
+      authStatus.textContent = `❌ 接続失敗: ${msg}`;
       authStatus.className = 'status-badge error';
       tokenInput.disabled = false;
       saveTokenBtn.style.display = 'inline-block';
@@ -155,12 +148,16 @@
     tokenInput.value = '';
     tokenInput.disabled = false;
     saveTokenBtn.style.display = 'inline-block';
-    verifyAndInitToken('');
+    clearTokenBtn.style.display = 'none';
+    authStatus.textContent = 'ログアウトしました。';
+    authStatus.className = 'status-badge';
+    operationBar.style.display = 'none';
+    editorSection.style.display = 'none';
   });
 
   // ── レシピ一覧取得 ──
   async function loadRecipeList() {
-    recipeSelect.innerHTML = '<option value="">-- 読み込み中... --</option>';
+    recipeSelect.innerHTML = '<option value="">-- レシピ一覧を読み込み中... --</option>';
     try {
       const contents = await ghApi('contents/recipes');
       recipesList = contents.filter(item => item.type === 'file' && item.name.endsWith('.md'));
@@ -173,14 +170,14 @@
         recipeSelect.appendChild(opt);
       });
     } catch (e) {
-      recipeSelect.innerHTML = '<option value="">取得エラー</option>';
+      recipeSelect.innerHTML = '<option value="">一覧取得エラー</option>';
       alert(`レシピ一覧の取得に失敗しました: ${e.message}`);
     }
   }
 
   reloadListBtn.addEventListener('click', loadRecipeList);
 
-  // ── フォーム操作 (行追加・削除) ──
+  // ── フォーム操作（行追加・削除） ──
   function addIngredientRow(name = '', qty = '') {
     const row = document.createElement('div');
     row.className = 'dynamic-row';
@@ -202,7 +199,7 @@
         <button type="button" class="btn btn-danger btn-sm remove-row-btn" style="margin-left:8px;">✕ 削除</button>
       </div>
       <textarea class="step-desc" rows="2" placeholder="手順の説明文..." required>${escapeHtml(desc)}</textarea>
-      <input type="text" class="step-point" placeholder="💡 ポイント（任意・コツなど）" value="${escapeHtml(point)}">
+      <input type="text" class="step-point" placeholder="💡 ポイント（任意）" value="${escapeHtml(point)}">
     `;
     card.querySelector('.remove-row-btn').addEventListener('click', () => card.remove());
     stepsContainer.appendChild(card);
@@ -211,7 +208,7 @@
   addIngredientBtn.addEventListener('click', () => addIngredientRow());
   addStepBtn.addEventListener('click', () => addStepRow());
 
-  // 画像選択時のBase64読み込み
+  // 画像選択時のプレビューとBase64化
   imageInput.addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (!file) {
@@ -227,7 +224,7 @@
     reader.readAsDataURL(file);
   });
 
-  // ── 新規作成モードへの切り替え ──
+  // ── 新規作成モード ──
   newRecipeBtn.addEventListener('click', () => {
     recipeSelect.value = '';
     currentFileSha = null;
@@ -244,7 +241,7 @@
     editorSection.style.display = 'block';
   });
 
-  // ── 既存レシピの読み込み・解析 ──
+  // ── 既存レシピ読み込み ──
   recipeSelect.addEventListener('change', async () => {
     const slug = recipeSelect.value;
     if (!slug) {
@@ -267,11 +264,11 @@
       const mdContent = base64ToUtf8(fileData.content);
       parseMarkdownToForm(mdContent);
     } catch (e) {
-      alert(`レシピの取得に失敗しました: ${e.message}`);
+      alert(`レシピの読み込みに失敗しました: ${e.message}`);
     }
   });
 
-  // ── Markdownの解析 (Front Matter & セクション分解) ──
+  // ── Markdownのパース ──
   function parseMarkdownToForm(md) {
     const fmMatch = md.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/);
     if (!fmMatch) return;
@@ -279,7 +276,6 @@
     const fmText = fmMatch[1];
     const body = fmMatch[2];
 
-    // Front Matter 抽出
     const getFmValue = (key) => {
       const m = fmText.match(new RegExp(`^${key}:\\s*(.*)$`, 'm'));
       return m ? m[1].replace(/^["']|["']$/g, '').trim() : '';
@@ -291,19 +287,19 @@
     descInput.value = getFmValue('description');
     servingsInput.value = getFmValue('servings') || '2';
 
-    // 材料セクション解析
+    // 材料
     const ingSectionMatch = body.match(/## 材料\s*\n([\s\S]*?)(?=\n## 手順|$)/);
     if (ingSectionMatch) {
       const lines = ingSectionMatch[1].split('\n');
       lines.forEach(line => {
-        const itemMatch = line.match(/^-\s*(.+?):\s*(.+)$/);
+        const itemMatch = line.match(/^-\s*([^:]+):\s*(.+)$/);
         if (itemMatch) {
           addIngredientRow(itemMatch[1].trim(), itemMatch[2].trim());
         }
       });
     }
 
-    // 手順セクション解析
+    // 手順
     const stepsSectionMatch = body.match(/## 手順\s*\n([\s\S]*)$/);
     if (stepsSectionMatch) {
       const stepBlocks = stepsSectionMatch[1].split(/(?=^###\s+)/m);
@@ -331,7 +327,7 @@
     if (!stepsContainer.children.length) addStepRow();
   }
 
-  // ── Markdownの生成 ──
+  // ── Markdown生成 ──
   function buildMarkdownFromForm() {
     const today = new Date().toISOString().slice(0, 10);
     let md = '---\n';
@@ -373,7 +369,7 @@
     return md;
   }
 
-  // ── 保存処理 (コミット) ──
+  // ── 保存（コミット実行） ──
   recipeForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const slug = slugInput.value.trim();
@@ -386,7 +382,6 @@
       const mdContent = buildMarkdownFromForm();
       const base64Content = utf8ToBase64(mdContent);
 
-      // 既存のSHAを最新確認
       if (!currentFileSha) {
         try {
           const existing = await ghApi(`contents/recipes/${slug}.md`);
@@ -394,18 +389,20 @@
         } catch (_) {}
       }
 
-      // 1. Markdownファイルのコミット
+      // 1. Markdownのコミット
+      const mdPayload = {
+        message: `Update recipe: ${slug}`,
+        content: base64Content,
+        branch: BRANCH
+      };
+      if (currentFileSha) mdPayload.sha = currentFileSha;
+
       await ghApi(`contents/recipes/${slug}.md`, {
         method: 'PUT',
-        body: JSON.stringify({
-          message: `Update recipe: ${slug} [skip ci]`,
-          content: base64Content,
-          branch: BRANCH,
-          sha: currentFileSha || undefined
-        })
+        body: JSON.stringify(mdPayload)
       });
 
-      // 2. 完成写真があれば保存
+      // 2. 画像のコミット（選択されている場合）
       if (attachedImageBase64) {
         let imgSha = null;
         try {
@@ -413,14 +410,16 @@
           imgSha = existingImg.sha;
         } catch (_) {}
 
+        const imgPayload = {
+          message: `Update recipe image: ${slug}`,
+          content: attachedImageBase64,
+          branch: BRANCH
+        };
+        if (imgSha) imgPayload.sha = imgSha;
+
         await ghApi(`contents/recipes/img/${slug}_complete.jpg`, {
           method: 'PUT',
-          body: JSON.stringify({
-            message: `Update recipe image: ${slug}`,
-            content: attachedImageBase64,
-            branch: BRANCH,
-            sha: imgSha || undefined
-          })
+          body: JSON.stringify(imgPayload)
         });
       }
 
@@ -439,7 +438,7 @@
   // ── 削除処理 ──
   deleteRecipeBtn.addEventListener('click', async () => {
     const slug = slugInput.value.trim();
-    if (!confirm(`レシピ「${slug}」を完全に削除しますか？\n（この操作はGitHubのコミット履歴に残りますが、ファイルは削除されます）`)) {
+    if (!confirm(`レシピ「${slug}」を完全に削除しますか？`)) {
       return;
     }
 
@@ -472,7 +471,7 @@
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
-  // 初期化実行
+  // 初期化
   if (currentToken) {
     verifyAndInitToken(currentToken);
   }
