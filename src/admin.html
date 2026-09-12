@@ -16,17 +16,25 @@
   </header>
 
   <main class="admin-main">
-    <!-- トークン認証パネル -->
-    <section class="admin-card auth-card" id="auth-section">
-      <h2>GitHub API 認証設定</h2>
-      <p class="desc-text">GitHubの Personal Access Token (PAT: ContentsのRead/Write権限) を入力してください。トークンはお使いのブラウザ内（LocalStorage）にのみ安全に保持されます。</p>
-      <div class="form-row">
-        <input type="password" id="gh-token-input" placeholder="github_pat_... または ghp_...">
-        <button type="button" class="btn btn-primary" id="save-token-btn">認証して保存</button>
-        <button type="button" class="btn btn-secondary" id="clear-token-btn" style="display:none;">ログアウト</button>
+    <!-- トークン認証パネル（アコーディオン式） -->
+    <details class="admin-card auth-card" id="auth-accordion" open>
+      <summary class="auth-summary">
+        <div class="auth-summary-title">
+          <span>🔑 GitHub API 認証設定</span>
+          <span id="auth-summary-badge" class="badge">未認証</span>
+        </div>
+        <span class="auth-chevron">▼</span>
+      </summary>
+      <div class="auth-content">
+        <p class="desc-text">GitHubの Personal Access Token (PAT) を入力してください。ブラウザ内（LocalStorage）にのみ安全に保持されます。</p>
+        <div class="form-row">
+          <input type="password" id="gh-token-input" placeholder="github_pat_... または ghp_...">
+          <button type="button" class="btn btn-primary" id="save-token-btn">認証して保存</button>
+          <button type="button" class="btn btn-secondary" id="clear-token-btn" style="display:none;">ログアウト</button>
+        </div>
+        <div id="auth-status" class="status-badge"></div>
       </div>
-      <div id="auth-status" class="status-badge"></div>
-    </section>
+    </details>
 
     <!-- レシピ選択・操作バー -->
     <section class="admin-card" id="operation-bar" style="display:none;">
@@ -34,12 +42,12 @@
         <h2>レシピ選択 / 新規作成</h2>
         <button type="button" class="btn btn-success" id="new-recipe-btn">＋ 新規レシピ作成</button>
       </div>
-      <div class="form-row">
-        <label for="recipe-select">既存レシピを編集:</label>
+      <div class="form-row select-row">
+        <label for="recipe-select">既存レシピ:</label>
         <select id="recipe-select">
           <option value="">-- レシピ一覧を読み込み中... --</option>
         </select>
-        <button type="button" class="btn btn-secondary" id="reload-list-btn">🔄 一覧再取得</button>
+        <button type="button" class="btn btn-secondary" id="reload-list-btn" title="最新状態を取得">🔄</button>
       </div>
     </section>
 
@@ -47,7 +55,10 @@
     <section class="admin-card" id="editor-section" style="display:none;">
       <div class="form-header-action">
         <h2 id="form-mode-title">新規レシピの作成</h2>
-        <button type="button" class="btn btn-danger" id="delete-recipe-btn" style="display:none;">🗑️ このレシピを削除</button>
+        <div class="header-btns">
+          <a href="#" target="_blank" class="btn btn-outline" id="view-page-btn" style="display:none;">🌐 レシピページを開く</a>
+          <button type="button" class="btn btn-danger" id="delete-recipe-btn" style="display:none;">🗑️ 削除</button>
+        </div>
       </div>
 
       <form id="recipe-form">
@@ -95,20 +106,24 @@
           <div id="image-preview" class="img-preview-box"></div>
         </div>
 
-        <!-- 材料ブロック -->
+        <!-- 材料ブロック（グループ対応） -->
         <div class="section-divider">
-          <h3>材料リスト</h3>
-          <p class="desc-text">分量の先頭に半角数値（200g, 1/2個, 大さじ1 など）を記載すると、人数変更時の自動計算に対応します。</p>
-          <div id="ingredients-container"></div>
-          <button type="button" class="btn btn-secondary btn-sm" id="add-ingredient-btn">＋ 材料を追加</button>
+          <div class="section-title-action">
+            <h3>材料リスト</h3>
+            <button type="button" class="btn btn-secondary btn-sm" id="add-group-btn">＋ 材料グループを追加</button>
+          </div>
+          <p class="desc-text">分量の先頭に半角数値（200g, 1/2個, 大さじ1 など）を入れると、人数変更時の自動計算に対応します。</p>
+          <div id="ingredient-groups-container"></div>
         </div>
 
         <!-- 手順ブロック -->
         <div class="section-divider">
-          <h3>手順リスト</h3>
+          <div class="section-title-action">
+            <h3>手順リスト</h3>
+            <button type="button" class="btn btn-secondary btn-sm" id="add-step-btn">＋ 手順を追加</button>
+          </div>
           <p class="desc-text">説明文中に「5分」「1分30秒」と書くと、レシピ画面で自動タイマー化されます。</p>
           <div id="steps-container-inputs"></div>
-          <button type="button" class="btn btn-secondary btn-sm" id="add-step-btn">＋ 手順を追加</button>
         </div>
 
         <div class="form-actions">
@@ -118,6 +133,6 @@
     </section>
   </main>
 
-  <script src="js/admin.js"></script>
+  <script src="js/admin.js?v=3"></script>
 </body>
 </html>
