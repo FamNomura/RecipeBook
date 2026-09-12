@@ -43,10 +43,11 @@
   const addStepBtn = document.getElementById('add-step-btn');
   const submitBtn = document.getElementById('submit-btn');
 
-// ── GitHub API Helper ──
+// ── GitHub API Helper（修正版） ──
   async function ghApi(path, options = {}) {
-    const cleanPath = path ? (path.startsWith('/') ? path.slice(1) : path) : '';
-    const url = cleanPath 
+    // 先頭や末尾のスラッシュを整理
+    const cleanPath = path ? path.replace(/^\/+|\/+$/g, '') : '';
+    const url = cleanPath
       ? `https://api.github.com/repos/${OWNER}/${REPO}/${cleanPath}`
       : `https://api.github.com/repos/${OWNER}/${REPO}`;
 
@@ -56,24 +57,54 @@
       ...options.headers
     };
 
-    try {
-      const res = await fetch(url, {
-        method: options.method || 'GET',
-        headers: headers,
-        body: options.body
-      });
+    const res = await fetch(url, {
+      method: options.method || 'GET',
+      headers: headers,
+      body: options.body
+    });
 
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(`HTTP ${res.status}: ${errData.message || res.statusText}`);
-      }
-      return res.status !== 204 ? res.json() : true;
-    } catch (err) {
-      console.error('Fetch Error Detail:', err);
-      throw err;
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(`HTTP ${res.status}: ${errData.message || res.statusText}`);
     }
+    return res.status !== 204 ? res.json() : true;
   }
 
+  // ── 認証状態管理（修正版） ──
+  async function verifyAndInitToken(token) {
+    if (!token) {
+      authStatus.textContent = 'トークンが未設定です。';
+      authStatus.className = 'status-badge error';
+      clearTokenBtn.style.display = 'none';
+      operationBar.style.display = 'none';
+      editorSection.style.display = 'none';
+      return;
+    }
+    currentToken = token.trim(); // 空白を自動除去
+    authStatus.textContent = 'GitHubに接続中...';
+    authStatus.className = 'status-badge';
+
+    try {
+      // recipes フォルダの存在確認を兼ねて疎通テスト
+      await ghApi('contents/recipes');
+      localStorage.setItem(TOKEN_KEY, currentToken);
+      tokenInput.value = '••••••••••••••••••••';
+      tokenInput.disabled = true;
+      saveTokenBtn.style.display = 'none';
+      clearTokenBtn.style.display = 'inline-block';
+      authStatus.textContent = '✓ 接続成功: 編集権限を確認しました';
+      authStatus.className = 'status-badge success';
+
+      operationBar.style.display = 'block';
+      loadRecipeList();
+    } catch (e) {
+      authStatus.textContent = `❌ 接続失敗: ${e.message}`;
+      authStatus.className = 'status-badge error';
+      tokenInput.disabled = false;
+      saveTokenBtn.style.display = 'inline-block';
+      clearTokenBtn.style.display = 'none';
+    }
+  }
   // UTF-8 対応 Base64 相互変換
   function utf8ToBase64(str) {
     return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (match, p1) => String.fromCharCode('0x' + p1)));
