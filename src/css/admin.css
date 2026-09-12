@@ -1,0 +1,168 @@
+.admin-badge {
+  font-size: 0.75rem;
+  background: var(--color-primary);
+  color: #fff;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  vertical-align: middle;
+}
+
+.admin-main {
+  max-width: 800px;
+  margin: 20px auto;
+  padding: 0 16px 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.admin-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 20px;
+  box-shadow: var(--shadow-sm);
+}
+
+.desc-text {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+}
+
+.form-row, .field-row-2 {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.field-row-2 {
+  margin-bottom: 14px;
+}
+
+.field-row-2 > .field-group {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.field-group label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.req {
+  color: var(--color-like);
+}
+
+input[type="text"],
+input[type="password"],
+input[type="number"],
+textarea,
+select {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1.5px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  box-sizing: border-box;
+}
+
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.input-with-affix {
+  display: flex;
+  align-items: center;
+  background: var(--bg-input);
+  border: 1.5px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.input-with-affix .affix {
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  background: var(--bg-body);
+}
+
+.input-with-affix input {
+  border: none;
+  background: transparent;
+}
+
+.btn {
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.2s;
+}
+
+.btn:hover { opacity: 0.85; }
+.btn-primary { background: var(--color-primary); color: #fff; }
+.btn-secondary { background: var(--border-light); color: var(--text-primary); }
+.btn-success { background: var(--color-accent); color: #fff; }
+.btn-danger { background: var(--color-like); color: #fff; }
+.btn-sm { padding: 4px 10px; font-size: 0.78rem; }
+.btn-large { padding: 12px 24px; font-size: 1rem; width: 100%; }
+
+.bar-header, .form-header-action {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.section-divider {
+  border-top: 1px solid var(--border-light);
+  padding-top: 16px;
+  margin-top: 20px;
+}
+
+.dynamic-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+  align-items: center;
+}
+
+.step-card-input {
+  background: var(--bg-body);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.status-badge {
+  margin-top: 10px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.status-badge.success { color: var(--color-accent); }
+.status-badge.error { color: var(--color-like); }
+
+.img-preview-box img {
+  max-width: 180px;
+  max-height: 120px;
+  border-radius: var(--radius-sm);
+  margin-top: 8px;
+}
