@@ -43,20 +43,35 @@
   const addStepBtn = document.getElementById('add-step-btn');
   const submitBtn = document.getElementById('submit-btn');
 
-  // ── GitHub API Helper ──
+// ── GitHub API Helper ──
   async function ghApi(path, options = {}) {
-    const url = `https://api.github.com/repos/${OWNER}/${REPO}/${path}`;
+    const cleanPath = path ? (path.startsWith('/') ? path.slice(1) : path) : '';
+    const url = cleanPath 
+      ? `https://api.github.com/repos/${OWNER}/${REPO}/${cleanPath}`
+      : `https://api.github.com/repos/${OWNER}/${REPO}`;
+
     const headers = {
-      'Accept': 'application/vnd.github.v3+json',
-      'Authorization': `Bearer ${currentToken}`,
+      'Accept': 'application/vnd.github+json',
+      'Authorization': `Bearer ${currentToken.trim()}`,
       ...options.headers
     };
-    const res = await fetch(url, { credentials: 'omit', ...options, headers });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ message: res.statusText }));
-      throw new Error(err.message || `API Error: ${res.status}`);
+
+    try {
+      const res = await fetch(url, {
+        method: options.method || 'GET',
+        headers: headers,
+        body: options.body
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(`HTTP ${res.status}: ${errData.message || res.statusText}`);
+      }
+      return res.status !== 204 ? res.json() : true;
+    } catch (err) {
+      console.error('Fetch Error Detail:', err);
+      throw err;
     }
-    return res.status !== 204 ? res.json() : true;
   }
 
   // UTF-8 対応 Base64 相互変換
