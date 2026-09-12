@@ -121,7 +121,6 @@
       authStatus.textContent = '✓ 接続成功: 編集権限を確認しました';
       authStatus.className = 'status-badge success';
 
-      // アコーディオンを自動で折りたたむ
       authSummaryBadge.textContent = '✓ 接続済み';
       authSummaryBadge.className = 'badge success';
       authAccordion.open = false;
@@ -165,7 +164,6 @@
   async function loadRecipeList() {
     recipeSelect.innerHTML = '<option value="">-- レシピ一覧を読み込み中... --</option>';
 
-    // 1. 公開済みの recipes.json または index.html からタイトル辞書を作成
     let titleMap = {};
     try {
       const res = await fetch(`recipes.json?t=${Date.now()}`);
@@ -175,7 +173,6 @@
       }
     } catch (_) {}
 
-    // 2. GitHub API で最新のファイル一覧を取得
     try {
       const contents = await ghApi('contents/recipes');
       recipesList = contents.filter(item => item.type === 'file' && item.name.endsWith('.md'));
@@ -203,7 +200,7 @@
     card.className = 'ingredient-group-card';
     card.innerHTML = `
       <div class="group-header">
-        <input type="text" class="group-title-input" placeholder="グループ名（例: 具材、合わせ調味料、ソース ※空欄でも可）" value="${escapeHtml(groupName)}">
+        <input type="text" class="group-title-input" placeholder="グループ名（例: 具材、タレ、ソース ※空欄でも可）" value="${escapeHtml(groupName)}">
         <button type="button" class="btn btn-secondary btn-sm add-row-to-group-btn">＋ 材料を追加</button>
         <button type="button" class="btn btn-danger btn-sm remove-group-btn" title="グループごと削除">✕ 削除</button>
       </div>
@@ -287,7 +284,7 @@
     reader.readAsDataURL(file);
   });
 
-  // ── 新規作成モード ──
+  // 新規作成
   newRecipeBtn.addEventListener('click', () => {
     recipeSelect.value = '';
     currentFileSha = null;
@@ -318,7 +315,6 @@
     formModeTitle.textContent = `レシピ編集: ${slug}`;
     deleteRecipeBtn.style.display = 'inline-block';
     
-    // レシピページリンクの設定
     viewPageBtn.href = `${slug}.html`;
     viewPageBtn.style.display = 'inline-flex';
 
@@ -339,9 +335,12 @@
     }
   });
 
-  // ── Markdownのパース（材料グループ＆各種記法に対応） ──
+  // ── Markdownのパース（完全強化版） ──
   function parseMarkdownToForm(md) {
-    const fmMatch = md.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/);
+    // 改行コードを LF に統一し、BOM を除去
+    const normalizedMd = md.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+    const fmMatch = normalizedMd.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
     if (!fmMatch) return;
 
     const fmText = fmMatch[1];
@@ -358,46 +357,44 @@
     descInput.value = getFmValue('description');
     servingsInput.value = getFmValue('servings') || '2';
 
-    // 材料セクション解析
-    const ingSectionMatch = body.match(/## 材料\s*\n([\s\S]*?)(?=\n## 手順|$)/);
+    // ── 材料セクションを行単位（ステートマシン）で解析 ──
+    const ingSectionMatch = body.match(/(?:^|\n)##\s*材料[^\n]*\n([\s\S]*?)(?=(?:\n##\s*手順|\n##\s*作り方|\n##\s*|$))/i);
     if (ingSectionMatch) {
       const rawText = ingSectionMatch[1].trim();
-      // ### 見出しで分割
-      const rawBlocks = rawText.split(/(?=^###\s+)/m);
+      const lines = rawText.split('\n');
 
-      rawBlocks.forEach(block => {
-        let groupTitle = '';
-        const titleMatch = block.match(/^###\s*(.+)$/m);
-        let contentLines = block.split('\n');
+      let currentGroupContainer = null;
 
-        if (titleMatch) {
-          // 【具材】などの囲み文字をきれいに保持
-          groupTitle = titleMatch[1].replace(/^[【\[](.+?)[】\]]$/, '$1').trim();
-          contentLines = block.replace(/^###\s+.+$/m, '').trim().split('\n');
+      lines.forEach(line => {
+        const trimmed = line.trim();
+        if (!trimmed) return;
+
+        // 1. グループ見出し行の判定 (### 【具材】 や ### ソース)
+        const groupMatch = trimmed.match(/^###\s*(.+)$/);
+        if (groupMatch) {
+          // 【 】 や [ ] をきれいにトリム
+          const gName = groupMatch[1].replace(/^[【\[](.+?)[】\]]$/, '$1').trim();
+          currentGroupContainer = addIngredientGroup(gName);
+          return;
         }
 
-        const items = [];
-        contentLines.forEach(line => {
-          // 行頭 -, *, + および コロン : または ： に対応
-          const m = line.match(/^[-*+]\s*(.+?)[:：]\s*(.+)$/);
-          if (m) {
-            items.push({ name: m[1].trim(), qty: m[2].trim() });
+        // 2. 材料行の判定 (- 材料: 分量 または * 材料: 分量)
+        const itemMatch = trimmed.match(/^[-*+]\s*([^:：]+)[:：]\s*(.+)$/);
+        if (itemMatch) {
+          // まだグループが作られていない場合は「グループ名なし」で新規作成
+          if (!currentGroupContainer) {
+            currentGroupContainer = addIngredientGroup('');
           }
-        });
-
-        if (items.length > 0 || groupTitle) {
-          const groupContainer = addIngredientGroup(groupTitle);
-          if (items.length > 0) {
-            items.forEach(it => addIngredientRow(groupContainer, it.name, it.qty));
-          } else {
-            addIngredientRow(groupContainer);
-          }
+          const name = itemMatch[1].trim();
+          const qty = itemMatch[2].trim();
+          addIngredientRow(currentGroupContainer, name, qty);
         }
+        // 注記（※...）などは自然にスキップされる
       });
     }
 
-    // 手順セクション解析
-    const stepsSectionMatch = body.match(/## 手順\s*\n([\s\S]*)$/);
+    // ── 手順セクションの解析 ──
+    const stepsSectionMatch = body.match(/(?:^|\n)##\s*(?:手順|作り方)[^\n]*\n([\s\S]*)$/i);
     if (stepsSectionMatch) {
       const stepBlocks = stepsSectionMatch[1].split(/(?=^###\s+)/m);
       stepBlocks.forEach(block => {
@@ -420,14 +417,15 @@
       });
     }
 
+    // 1件もなかった場合のフォールバック（初期空行）
     if (!groupsContainer.children.length) {
-      const g = addIngredientGroup();
+      const g = addIngredientGroup('');
       addIngredientRow(g);
     }
     if (!stepsContainer.children.length) addStepRow();
   }
 
-  // ── Markdown生成（グループ構造を正確に出力） ──
+  // ── Markdown生成 ──
   function buildMarkdownFromForm() {
     const today = new Date().toISOString().slice(0, 10);
     let md = '---\n';
