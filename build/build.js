@@ -22,9 +22,8 @@ function initDirectories() {
   fs.mkdirSync(DOCS_IMG_DIR, { recursive: true });
 }
 
-// 静的アセットのコピー (admin.html, admin.css, admin.js を含む)
+// 静的アセットのコピー
 function copyStaticAssets() {
-  // CSS
   const cssSrc = path.join(SRC_DIR, 'css');
   if (fs.existsSync(cssSrc)) {
     fs.readdirSync(cssSrc).forEach(file => {
@@ -32,7 +31,6 @@ function copyStaticAssets() {
     });
   }
 
-  // JS
   const jsSrc = path.join(SRC_DIR, 'js');
   if (fs.existsSync(jsSrc)) {
     fs.readdirSync(jsSrc).forEach(file => {
@@ -40,13 +38,11 @@ function copyStaticAssets() {
     });
   }
 
-  // admin.html のコピー
   const adminHtmlSrc = path.join(SRC_DIR, 'admin.html');
   if (fs.existsSync(adminHtmlSrc)) {
     fs.copyFileSync(adminHtmlSrc, path.join(DOCS_DIR, 'admin.html'));
   }
 
-  // レシピ画像 (recipes/img/ -> docs/recipes/img/)
   if (fs.existsSync(RECIPES_IMG_DIR)) {
     fs.readdirSync(RECIPES_IMG_DIR).forEach(file => {
       fs.copyFileSync(path.join(RECIPES_IMG_DIR, file), path.join(DOCS_IMG_DIR, file));
@@ -54,12 +50,11 @@ function copyStaticAssets() {
   }
 }
 
-// 数値・単位の分離パース（人数変更スケーリング用）
+// 分量パース
 function parseQuantity(qtyStr) {
   if (!qtyStr) return { baseValue: null, prefix: '', suffix: '' };
   const trimmed = qtyStr.trim();
 
-  // "大さじ1.5", "小さじ1/2" のようなプレフィックス付き
   const prefixMatch = trimmed.match(/^(大さじ|小さじ|少々|適量)?\s*(\d+(?:\.\d+)?|\d+\/\d+)?(.*)$/);
   if (!prefixMatch) return { baseValue: null, prefix: '', suffix: trimmed };
 
@@ -82,17 +77,15 @@ function parseQuantity(qtyStr) {
   return { baseValue: num, prefix, suffix };
 }
 
-// HTMLエスケープ
 function escapeHtml(str) {
   if (!str) return '';
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-// レシピ個別ページのパース
+// レシピMarkdownのパース
 function parseRecipeMarkdown(fileContent, slug) {
   const { data, content } = matter(fileContent);
 
-  // 材料ブロック抽出
   const ingredients = [];
   const ingMatch = content.match(/## 材料\s*\n([\s\S]*?)(?=\n## 手順|$)/);
   if (ingMatch) {
@@ -105,7 +98,7 @@ function parseRecipeMarkdown(fileContent, slug) {
         currentGroup = groupMatch[1].trim();
         return;
       }
-      const itemMatch = line.match(/^-\s*([^:]+):\s*(.+)$/);
+      const itemMatch = line.match(/^[-*+]\s*([^:：]+)[:：]\s*(.+)$/);
       if (itemMatch) {
         const name = itemMatch[1].trim();
         const rawQty = itemMatch[2].trim();
@@ -122,7 +115,6 @@ function parseRecipeMarkdown(fileContent, slug) {
     });
   }
 
-  // 手順ブロック抽出
   const steps = [];
   const stepsMatch = content.match(/## 手順\s*\n([\s\S]*)$/);
   if (stepsMatch) {
@@ -137,7 +129,7 @@ function parseRecipeMarkdown(fileContent, slug) {
       const normalLines = [];
 
       bodyLines.forEach(l => {
-        const pMatch = l.match(/^(?:>\s*\*\*ポイント\*\*|ポイント):\s*(.*)$/);
+        const pMatch = l.match(/^(?:>\s*\*\*ポイント\*\*|ポイント)[:：]\s*(.*)$/);
         if (pMatch) {
           pointText = pMatch[1].trim();
         } else if (l.trim()) {
@@ -154,7 +146,6 @@ function parseRecipeMarkdown(fileContent, slug) {
     });
   }
 
-  // 画像探索
   const extensions = ['.jpg', '.jpeg', '.png', '.webp'];
   let completeImage = null;
   let thumbImage = null;
@@ -168,7 +159,6 @@ function parseRecipeMarkdown(fileContent, slug) {
     }
   }
 
-  // サムネイルが無ければ完成写真でフォールバック
   if (!thumbImage && completeImage) {
     thumbImage = completeImage;
   }
@@ -193,7 +183,7 @@ function parseRecipeMarkdown(fileContent, slug) {
   };
 }
 
-// レシピ個別HTML生成
+// レシピ個別HTML
 function renderRecipeHtml(recipe) {
   let ingredientsHtml = '';
   let lastGroup = null;
@@ -326,7 +316,6 @@ function renderRecipeHtml(recipe) {
     </article>
   </main>
 
-  <!-- フローティングタイマー -->
   <div id="global-timer-overlay" class="timer-overlay" hidden>
     <div class="timer-box">
       <span class="timer-label">⏱️ タイマー</span>
@@ -352,7 +341,7 @@ function renderRecipeHtml(recipe) {
 </html>`;
 }
 
-// トップページ（一覧）HTML生成
+// トップ一覧HTML
 function renderIndexHtml(recipes) {
   const allGenresSet = new Set();
   recipes.forEach(r => r.genres.forEach(g => allGenresSet.add(g)));
@@ -453,7 +442,7 @@ function renderIndexHtml(recipes) {
 </html>`;
 }
 
-// ── メインビルド実行 ──
+// ── ビルド実行 ──
 function build() {
   console.log('🚀 ビルドを開始します...');
   initDirectories();
@@ -471,16 +460,25 @@ function build() {
     const recipe = parseRecipeMarkdown(content, slug);
     parsedRecipes.push(recipe);
 
-    // 各レシピHTML出力 (docs/[slug].html)
     const recipeHtml = renderRecipeHtml(recipe);
     fs.writeFileSync(path.join(DOCS_DIR, `${slug}.html`), recipeHtml, 'utf-8');
     console.log(`  ✓ 生成完了: docs/${slug}.html`);
   });
 
-  // トップページ出力 (docs/index.html)
+  // トップページ出力
   const indexHtml = renderIndexHtml(parsedRecipes);
   fs.writeFileSync(path.join(DOCS_DIR, 'index.html'), indexHtml, 'utf-8');
   console.log('  ✓ 生成完了: docs/index.html');
+
+  // 管理画面用の簡易一覧 JSON を出力
+  const recipesMeta = parsedRecipes.map(r => ({
+    slug: r.slug,
+    title: r.title,
+    genres: r.genres,
+    updated: r.updated
+  }));
+  fs.writeFileSync(path.join(DOCS_DIR, 'recipes.json'), JSON.stringify(recipesMeta, null, 2), 'utf-8');
+  console.log('  ✓ 生成完了: docs/recipes.json');
 
   console.log(`✨ ビルド完了: 合計 ${parsedRecipes.length} 件のレシピを生成しました。`);
 }
