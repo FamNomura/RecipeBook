@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>レシピ管理 - RecipeBook Admin</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <h1 class="site-title"><a href="index.html">🍳 RecipeBook</a> <span class="admin-badge">Admin</span></h1>
+      <a href="index.html" class="back-link">トップへ戻る</a>
+    </div>
+  </header>
+
+  <main class="admin-main">
+    <!-- トークン認証パネル -->
+    <section class="admin-card auth-card" id="auth-section">
+      <h2>GitHub API 認証設定</h2>
+      <p class="desc-text">GitHubの Personal Access Token (PAT: ContentsのRead/Write権限) を入力してください。トークンはお使いのブラウザ内（LocalStorage）にのみ安全に保持されます。</p>
+      <div class="form-row">
+        <input type="password" id="gh-token-input" placeholder="github_pat_... または ghp_...">
+        <button type="button" class="btn btn-primary" id="save-token-btn">認証して保存</button>
+        <button type="button" class="btn btn-secondary" id="clear-token-btn" style="display:none;">ログアウト</button>
+      </div>
+      <div id="auth-status" class="status-badge"></div>
+    </section>
+
+    <!-- レシピ選択・操作バー -->
+    <section class="admin-card" id="operation-bar" style="display:none;">
+      <div class="bar-header">
+        <h2>レシピ選択 / 新規作成</h2>
+        <button type="button" class="btn btn-success" id="new-recipe-btn">＋ 新規レシピ作成</button>
+      </div>
+      <div class="form-row">
+        <label for="recipe-select">既存レシピを編集:</label>
+        <select id="recipe-select">
+          <option value="">-- レシピ一覧を読み込み中... --</option>
+        </select>
+        <button type="button" class="btn btn-secondary" id="reload-list-btn">🔄 一覧再取得</button>
+      </div>
+    </section>
+
+    <!-- メイン編集フォーム -->
+    <section class="admin-card" id="editor-section" style="display:none;">
+      <div class="form-header-action">
+        <h2 id="form-mode-title">新規レシピの作成</h2>
+        <button type="button" class="btn btn-danger" id="delete-recipe-btn" style="display:none;">🗑️ このレシピを削除</button>
+      </div>
+
+      <form id="recipe-form">
+        <div class="field-group">
+          <label for="recipe-slug">ファイル名（半角英数ハイフン） <span class="req">*</span></label>
+          <div class="input-with-affix">
+            <span class="affix">recipes/</span>
+            <input type="text" id="recipe-slug" placeholder="curry-rice" required pattern="^[a-zA-Z0-9_-]+$">
+            <span class="affix">.md</span>
+          </div>
+          <small>※ 既存レシピ名と同じ場合は上書き更新されます。</small>
+        </div>
+
+        <div class="field-row-2">
+          <div class="field-group">
+            <label for="recipe-title">料理名 (title) <span class="req">*</span></label>
+            <input type="text" id="recipe-title" placeholder="絶品ポークカレー" required>
+          </div>
+          <div class="field-group">
+            <label for="recipe-servings">基準人数 (servings)</label>
+            <input type="number" id="recipe-servings" value="2" min="1" max="20" required>
+          </div>
+        </div>
+
+        <div class="field-row-2">
+          <div class="field-group">
+            <label for="recipe-genre">ジャンル（カンマ区切り）</label>
+            <input type="text" id="recipe-genre" placeholder="和食, 煮込み料理, カレー">
+          </div>
+          <div class="field-group">
+            <label for="recipe-source">出典・参考元 (任意)</label>
+            <input type="text" id="recipe-source" placeholder="リュウジのバズレシピ 等">
+          </div>
+        </div>
+
+        <div class="field-group">
+          <label for="recipe-desc">料理の簡単な紹介 (description)</label>
+          <textarea id="recipe-desc" rows="2" placeholder="フライパン一つで手軽に作れる濃厚カレーです。"></textarea>
+        </div>
+
+        <!-- 完成写真アップロード -->
+        <div class="field-group">
+          <label for="recipe-image">完成写真 (任意: recipes/img/[スラッグ]_complete.jpg としてコミット)</label>
+          <input type="file" id="recipe-image" accept="image/jpeg,image/png,image/webp">
+          <div id="image-preview" class="img-preview-box"></div>
+        </div>
+
+        <!-- 材料ブロック -->
+        <div class="section-divider">
+          <h3>材料リスト</h3>
+          <p class="desc-text">分量の先頭に半角数値（200g, 1/2個, 大さじ1 など）を記載すると、人数変更時の自動計算に対応します。</p>
+          <div id="ingredients-container"></div>
+          <button type="button" class="btn btn-secondary btn-sm" id="add-ingredient-btn">＋ 材料を追加</button>
+        </div>
+
+        <!-- 手順ブロック -->
+        <div class="section-divider">
+          <h3>手順リスト</h3>
+          <p class="desc-text">説明文中に「5分」「1分30秒」と書くと、レシピ画面で自動タイマー化されます。</p>
+          <div id="steps-container-inputs"></div>
+          <button type="button" class="btn btn-secondary btn-sm" id="add-step-btn">＋ 手順を追加</button>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary btn-large" id="submit-btn">💾 GitHubに保存（コミット）</button>
+        </div>
+      </form>
+    </section>
+  </main>
+
+  <script src="js/admin.js"></script>
+</body>
+</html>
