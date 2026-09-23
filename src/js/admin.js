@@ -326,7 +326,7 @@
     attachedImageBase64 = null;
 
     try {
-      const fileData = await ghApi(`contents/recipes/${slug}.md`);
+      const fileData = await ghApi(`contents/recipes/${slug}.md?ref=${BRANCH}&t=${Date.now()}`);
       currentFileSha = fileData.sha;
       const mdContent = base64ToUtf8(fileData.content);
       parseMarkdownToForm(mdContent);
@@ -358,7 +358,8 @@
     servingsInput.value = getFmValue('servings') || '2';
 
     // ── 材料セクションを行単位（ステートマシン）で解析 ──
-    const ingSectionMatch = body.match(/(?:^|\n)##\s*材料[^\n]*\n([\s\S]*?)(?=(?:\n##\s*手順|\n##\s*作り方|\n##\s*|$))/i);
+    // 次の H2 見出し（## 手順、## 作り方等）または末尾までを捕捉
+    const ingSectionMatch = body.match(/(?:^|\n)##\s*材料[^\n]*\n([\s\S]*?)(?=(?:\n##(?!\s*#)|$))/i);
     if (ingSectionMatch) {
       const rawText = ingSectionMatch[1].trim();
       const lines = rawText.split('\n');
@@ -373,13 +374,14 @@
         const groupMatch = trimmed.match(/^###\s*(.+)$/);
         if (groupMatch) {
           // 【 】 や [ ] をきれいにトリム
-          const gName = groupMatch[1].replace(/^[【\[](.+?)[】\]]$/, '$1').trim();
+          let gName = groupMatch[1].trim();
+          gName = gName.replace(/^[【\[](.+?)[】\]]$/, '$1').trim();
           currentGroupContainer = addIngredientGroup(gName);
           return;
         }
 
-        // 2. 材料行の判定 (- 材料: 分量 または * 材料: 分量)
-        const itemMatch = trimmed.match(/^[-*+]\s*([^:：]+)[:：]\s*(.+)$/);
+        // 2. 材料行の判定 (- 材料: 分量 または * 材料: 分量、全角コロン・全角スペース対応)
+        const itemMatch = trimmed.match(/^[-*+]\s*([^:：]+?)[\t\s]*[:：][\t\s]*(.+)$/);
         if (itemMatch) {
           // まだグループが作られていない場合は「グループ名なし」で新規作成
           if (!currentGroupContainer) {
@@ -502,10 +504,13 @@
       };
       if (currentFileSha) mdPayload.sha = currentFileSha;
 
-      await ghApi(`contents/recipes/${slug}.md`, {
+      const putRes = await ghApi(`contents/recipes/${slug}.md`, {
         method: 'PUT',
         body: JSON.stringify(mdPayload)
       });
+      if (putRes && putRes.content && putRes.content.sha) {
+        currentFileSha = putRes.content.sha;
+      }
 
       if (attachedImageBase64) {
         let imgSha = null;
@@ -532,7 +537,10 @@
 
       await loadRecipeList();
       recipeSelect.value = slug;
-      recipeSelect.dispatchEvent(new Event('change'));
+      // 保存した内容でフォーム状態を即時更新（API反映遅延の影響を受けないようにする）
+      groupsContainer.innerHTML = '';
+      stepsContainer.innerHTML = '';
+      parseMarkdownToForm(mdContent);
     } catch (err) {
       alert(`❌ 保存に失敗しました: ${err.message}`);
     } finally {

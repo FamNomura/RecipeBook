@@ -87,18 +87,23 @@ function parseRecipeMarkdown(fileContent, slug) {
   const { data, content } = matter(fileContent);
 
   const ingredients = [];
-  const ingMatch = content.match(/## 材料\s*\n([\s\S]*?)(?=\n## 手順|$)/);
+  const ingMatch = content.match(/(?:^|\n)##\s*材料[^\n]*\n([\s\S]*?)(?=(?:\n##(?!\s*#)|$))/i);
   if (ingMatch) {
     const lines = ingMatch[1].split('\n');
     let currentGroup = null;
 
     lines.forEach(line => {
-      const groupMatch = line.match(/^###\s*【?(.+?)】?$/);
+      const trimmed = line.trim();
+      if (!trimmed) return;
+
+      const groupMatch = trimmed.match(/^###\s*(.+)$/);
       if (groupMatch) {
-        currentGroup = groupMatch[1].trim();
+        let gName = groupMatch[1].trim();
+        gName = gName.replace(/^[【\[](.+?)[】\]]$/, '$1').trim();
+        currentGroup = gName;
         return;
       }
-      const itemMatch = line.match(/^[-*+]\s*([^:：]+)[:：]\s*(.+)$/);
+      const itemMatch = trimmed.match(/^[-*+]\s*([^:：]+?)[\t\s]*[:：][\t\s]*(.+)$/);
       if (itemMatch) {
         const name = itemMatch[1].trim();
         const rawQty = itemMatch[2].trim();
@@ -116,7 +121,7 @@ function parseRecipeMarkdown(fileContent, slug) {
   }
 
   const steps = [];
-  const stepsMatch = content.match(/## 手順\s*\n([\s\S]*)$/);
+  const stepsMatch = content.match(/(?:^|\n)##\s*(?:手順|作り方)[^\n]*\n([\s\S]*)$/i);
   if (stepsMatch) {
     const stepBlocks = stepsMatch[1].split(/(?=^###\s+)/m);
     stepBlocks.forEach(block => {
